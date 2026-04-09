@@ -1,5 +1,7 @@
 import os
 import pandas as pd
+import boto3
+from botocore.client import Config
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from pandasai import SmartDataframe
@@ -7,7 +9,13 @@ from app.core.config import settings
 
 router = APIRouter(prefix="/excel", tags=["Excel Data Analysis"])
 
-MINIO_BASE_DIR = "/data/hrbust-ai-data/hrbust-ai-data-coze/docker/data/minio/opencoze"
+MINIO_ENDPOINT = "http://127.0.0.1:9000"
+MINIO_AK = "minioadmin"
+MINIO_SK = "minioadmin123"
+MINIO_BUCKET = "opencoze"
+TEMP_DIR = "/tmp/hrbust_excel_uploads"
+
+os.makedirs(TEMP_DIR, exist_ok=True)
 
 
 class CozeRequest(BaseModel):
@@ -17,58 +25,46 @@ class CozeRequest(BaseModel):
 
 @router.post("/analyze")
 def analyze_excel(payload: CozeRequest):
-    print(f"收到用户指令: {payload.query}")
+    try:
+        print(f"收到用户指令: {payload.query}")
+        print(f"目标Object Key: {payload.file}")
 
-    base_target_path = os.path.join(MINIO_BASE_DIR, payload.file)
-    print(f"锁定MinIO目标: {base_target_path}")
-
-    file_path = base_target_path
-
-    if os.path.isdir(base_target_path):
-        print("MinIO数据卷目录，开启扫描...")
-        real_data_path = None
-
-        for root, dirs, files in os.walk(base_target_path):
-            for f in files:
-                if f != "xl.meta":
-                    real_data_path = os.path.join(root, f)
-                    break
-
-            if real_data_path:
-                break
-
-        if not real_data_path:
-            raise HTTPException(
-                status_code=404, detail="掘地三尺都没有找到实体数据块！"
-            )
-
-        file_path = real_data_path
-
-    if not os.path.exists(file_path):
-        raise HTTPException(
-            status_code=404, detail=f"找不到实体数据块！穿透路径: {file_path}"
+        # S3协议握手
+        s3_client = boto3.client(
+            "s3",
+            endpoint_url=MINIO_ENDPOINT,
+            aws_access_key_id=MINIO_AK,
+            aws_secret_access_key=MINIO_SK,
+            config=Config(signature_version="s3v4"),
+            region_name="us-east-1",
         )
 
-    print(f"物理实体锁定: {file_path}")
+        # 重组提取
+        temp_file_path = os.path.join(TEMP_DIR, "minio_downloaded.xlsx")
+        print(f"正在从金库 {MINIO_BUCKET} 强行提取重组对象...")
 
-    try:
+        s3_client.download_file(MINIO_BUCKET, payload.file, temp_file_path)
+        print(f"对象重组成Excel, 在: {temp_file_path}")
+
         if payload.file.lower().endswith(".csv"):
-            df = pd.read_csv(file_path)
+            df = pd.read_csv(temp_file_path)
         else:
-            df = pd.read_excel(file_path, engine="openpyxl")
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Excel/CSV文件读取失败: {str(e)}")
+            df = pd.read_excel(temp_file_path)
 
-    try:
-        print("PandasAI 直读引擎点火...")
+        print("PandasAI...")
         sdf = SmartDataframe(df, config={"llm": settings.local_llm})
         result = sdf.chat(payload.query)
         print(f"分析结果: {result}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"PandasAI 分析失败: {str(e)}")
 
-    return {
-        "status": "success",
-        "query": payload.query,
-        "analysis_result": str(result),
-    }
+        if os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
+
+        return {
+            "status": "success",
+            "query": payload.query,
+            "analysis_result": str(result),
+        }
+
+    except Exception as e:
+        print(f"崩溃: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Excel/CSV文件读取失败: {str(e)}")
