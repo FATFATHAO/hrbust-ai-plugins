@@ -28,9 +28,20 @@ def analyze_excel(payload: CozeRequest):
 
         file_path = base_target_path
         if os.path.isdir(base_target_path):
-            print("MinIO数据卷目录！正在执行物理穿透...")
-            # 直接锁定里面的真实数据块part.1
-            file_path = os.path.join(base_target_path, "part.1")
+            print("MinIO数据卷目录,正在开启扫描...")
+
+            files_in_dir = os.listdir(base_target_path)
+            print(f"雷达探测到内部实体: {files_in_dir}")
+
+            target_files = [f for f in files_in_dir if f != "xl.meta"]
+
+            if not target_files:
+                raise HTTPException(
+                    status_code=404, detail="目录被掏空，没有找到实体数据块！"
+                )
+
+            real_data_file = target_files[0]
+            file_path = os.path.join(base_target_path, real_data_file)
 
         # 检查最终的物理数据块到底在不在
         if not os.path.exists(file_path):
@@ -38,7 +49,7 @@ def analyze_excel(payload: CozeRequest):
                 status_code=404, detail=f"抱歉，找不到实体数据块！穿透路径: {file_path}"
             )
 
-        print(f"物理实体路径: {file_path}")
+        print(f"物理实体锁定: {file_path}")
 
         # 本地硬盘直读
         if payload.file.lower().endswith(".csv"):
