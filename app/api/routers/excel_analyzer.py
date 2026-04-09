@@ -23,15 +23,22 @@ def analyze_excel(payload: CozeRequest):
 
         # 物理路径拼接
         # payload.file是类似tos-cn-i-xxx/xxx.xlsx
-        file_path = os.path.join(MINIO_BASE_DIR, payload.file)
-        print(f"物理绝对路径: {file_path}")
+        base_target_path = os.path.join(MINIO_BASE_DIR, payload.file)
+        print(f"锁定MinIO目标: {base_target_path}")
 
-        # 检查物理硬盘上文件到底在不在
+        file_path = base_target_path
+        if os.path.isdir(base_target_path):
+            print("MinIO数据卷目录！正在执行物理穿透...")
+            # 直接锁定里面的真实数据块part.1
+            file_path = os.path.join(base_target_path, "part.1")
+
+        # 检查最终的物理数据块到底在不在
         if not os.path.exists(file_path):
             raise HTTPException(
-                status_code=404,
-                detail=f"抱歉，在物理硬盘上找不到该文件！路径: {file_path}",
+                status_code=404, detail=f"抱歉，找不到实体数据块！穿透路径: {file_path}"
             )
+
+        print(f"物理实体路径: {file_path}")
 
         # 本地硬盘直读
         if payload.file.lower().endswith(".csv"):
