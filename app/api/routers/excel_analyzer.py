@@ -1,5 +1,4 @@
 import os
-import requests
 import pandas as pd
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -8,10 +7,10 @@ from app.core.config import settings
 
 router = APIRouter(prefix="/excel", tags=["Excel Data Analysis"])
 
-UPLOAD_DIR = "/tmp/hrbust_excel_uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+MINIO_BASE_DIR = "/data/hrbust-ai-data/hrbust-ai-data-coze/docker/data/minio/opencoze"
 
 
+# 模型
 class CozeRequest(BaseModel):
     file: str
     query: str
@@ -21,39 +20,29 @@ class CozeRequest(BaseModel):
 def analyze_excel(payload: CozeRequest):
     try:
         print(f"收到用户指令: {payload.query}")
-        print(f"收到原始TOS路径: {payload.file}")
 
-        # TOS路径修复
-        file_url = payload.file
-        # 如果Coze发来的不是完整的http链接, 挂上字节跳动的公网CDN！
-        if not file_url.startswith("http"):
-            file_url = f"https://lf-bot-studio-plugin-resource.coze.cn/obj/{file_url}"
-            print(f"URL修复完成: {file_url}")
+        # 物理路径拼接
+        # payload.file是类似tos-cn-i-xxx/xxx.xlsx
+        file_path = os.path.join(MINIO_BASE_DIR, payload.file)
+        print(f"物理绝对路径: {file_path}")
 
-        file_path = os.path.join(UPLOAD_DIR, "temp_coze_download.xlsx")
-        response = requests.get(file_url)
-
-        if response.status_code != 200:
+        # 检查物理硬盘上文件到底在不在
+        if not os.path.exists(file_path):
             raise HTTPException(
-                status_code=400, detail=f"下载表格失败！状态码: {response.status_code}"
+                status_code=404,
+                detail=f"抱歉，在物理硬盘上找不到该文件！路径: {file_path}",
             )
 
-        with open(file_path, "wb") as f:
-            f.write(response.content)
-        print("Excel")
-
+        # 本地硬盘直读
         if payload.file.lower().endswith(".csv"):
             df = pd.read_csv(file_path)
         else:
             df = pd.read_excel(file_path)
 
-        print("PandasAI...")
+        print("PandasAI直读")
         sdf = SmartDataframe(df, config={"llm": settings.local_llm})
         result = sdf.chat(payload.query)
         print(f"分析结果: {result}")
-
-        if os.path.exists(file_path):
-            os.remove(file_path)
 
         return {
             "status": "success",
@@ -63,5 +52,4 @@ def analyze_excel(payload: CozeRequest):
 
     except Exception as e:
         print(f"崩溃: {str(e)}")
-        return {"status": "error", "message": f"分析引擎发生错误: {str(e)}"}
-
+        return {"status": "error", "message": f"物理分析引擎发生错误: {str(e)}"}
