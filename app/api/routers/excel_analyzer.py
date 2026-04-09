@@ -5,6 +5,7 @@ from botocore.client import Config
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from pandasai import SmartDataframe
+from pandasai.llm import LangchainLLM
 from app.core.config import settings
 
 router = APIRouter(prefix="/excel", tags=["Excel Data Analysis"])
@@ -52,7 +53,10 @@ def analyze_excel(payload: CozeRequest):
             df = pd.read_excel(temp_file_path)
 
         print("PandasAI...")
-        sdf = SmartDataframe(df, config={"llm": settings.local_llm})
+
+        pandasai_llm = LangchainLLM(settings.local_llm)
+
+        sdf = SmartDataframe(df, config={"llm": pandasai_llm})
         result = sdf.chat(payload.query)
         print(f"分析结果: {result}")
 
