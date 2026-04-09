@@ -5,7 +5,7 @@ from botocore.client import Config
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from pandasai import SmartDataframe
-from pandasai.llm import LangchainLLM
+from pandasai.llm.local_llm import LocalLLM
 from app.core.config import settings
 
 router = APIRouter(prefix="/excel", tags=["Excel Data Analysis"])
@@ -52,10 +52,13 @@ def analyze_excel(payload: CozeRequest):
         else:
             df = pd.read_excel(temp_file_path)
 
-        print("PandasAI...")
+        print("PandasAI 原生直连引擎点火...")
 
-        pandasai_llm = LangchainLLM(settings.local_llm)
+        pandasai_llm = LocalLLM(
+            api_base="http://172.17.0.1:11434/v1", model="qwen2.5:32b"
+        )
 
+        # 强行注入原生引擎
         sdf = SmartDataframe(df, config={"llm": pandasai_llm})
         result = sdf.chat(payload.query)
         print(f"分析结果: {result}")
@@ -72,3 +75,4 @@ def analyze_excel(payload: CozeRequest):
     except Exception as e:
         print(f"崩溃: {str(e)}")
         raise HTTPException(status_code=400, detail=f"Excel/CSV文件读取失败: {str(e)}")
+
