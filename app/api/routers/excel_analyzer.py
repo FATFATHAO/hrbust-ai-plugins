@@ -62,7 +62,7 @@ def analyze_excel(payload: CozeRequest):
         if payload.file.lower().endswith(".csv"):
             df = pd.read_csv(file_path)
         else:
-            df = pd.read_excel(file_path)
+            df = pd.read_excel(file_path, engine="openpyxl")
 
         print("PandasAI 直读引擎点火...")
         sdf = SmartDataframe(df, config={"llm": settings.local_llm})
