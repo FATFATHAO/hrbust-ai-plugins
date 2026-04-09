@@ -765,6 +765,7 @@ dependencies = [
     { name = "pandasai" },
     { name = "pydantic-settings" },
     { name = "python-multipart" },
+    { name = "requests" },
     { name = "uvicorn" },
 ]
 
@@ -777,6 +778,7 @@ requires-dist = [
     { name = "pandasai", specifier = ">=3.0.0" },
     { name = "pydantic-settings", specifier = ">=2.13.1" },
     { name = "python-multipart", specifier = ">=0.0.24" },
+    { name = "requests", specifier = ">=2.33.1" },
     { name = "uvicorn", specifier = ">=0.44.0" },
 ]
 
