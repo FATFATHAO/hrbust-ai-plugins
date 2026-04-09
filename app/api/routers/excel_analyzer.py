@@ -9,7 +9,7 @@ from app.core.config import settings
 
 router = APIRouter(prefix="/excel", tags=["Excel Data Analysis"])
 
-MINIO_ENDPOINT = "http://127.0.0.1:9000"
+MINIO_ENDPOINT = "http://172.18.0.7:9000"
 MINIO_AK = "minioadmin"
 MINIO_SK = "minioadmin123"
 MINIO_BUCKET = "opencoze"
